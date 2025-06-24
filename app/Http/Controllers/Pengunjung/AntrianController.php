@@ -6,13 +6,37 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use PDO; // Diperlukan untuk binding parameter PDO
+use PDO;
 
 class AntrianController extends Controller
 {
     /**
+     * Mengambil daftar dokter yang tersedia di sebuah poli pada hari ini
+     * beserta biaya konsultasinya.
+     */
+    public function getJadwalByPoli($poli_id)
+    {
+        $dayMap = [
+            1 => 'senin', 2 => 'selasa', 3 => 'rabu', 4 => 'kamis', 
+            5 => 'jumat', 6 => 'sabtu', 7 => 'minggu'
+        ];
+        $todayIndonesian = $dayMap[now()->dayOfWeekIso];
+    
+        // Mengambil daftar dokter unik beserta biaya konsultasinya dari VIEW
+        $jadwal = DB::table('v_jadwal_dokter_lengkap')
+                    ->where('poli_id', $poli_id)
+                    ->where('hari', $todayIndonesian)
+                    ->where('sisa_kuota_hari_ini', '>', 0)
+                    // Memastikan kita mengambil biaya konsultasi
+                    ->select('dokter_id', 'nama_dokter', 'gelar', 'biaya_konsultasi')
+                    ->distinct('dokter_id') // Hanya satu entri per dokter
+                    ->get();
+        
+        return response()->json($jadwal);
+    }
+
+    /**
      * Memproses permintaan untuk mengambil nomor antrian baru.
-     * Metode ini akan memanggil Stored Procedure `sp_ambil_antrian`.
      */
     public function ambil(Request $request)
     {
@@ -23,15 +47,13 @@ class AntrianController extends Controller
 
         $pengunjung_id = Auth::id();
         $dokter_id = $request->dokter_id;
-        $tanggal_kunjungan = now()->toDateString(); // Antrian selalu untuk hari ini
+        $tanggal_kunjungan = now()->toDateString();
         $keluhan = $request->keluhan ?? '';
 
         try {
-            // Menggunakan PDO untuk memanggil Stored Procedure dengan parameter OUT
             $pdo = DB::connection()->getPdo();
             $stmt = $pdo->prepare("CALL sp_ambil_antrian(?, ?, ?, ?, @p_nomor_antrian, @p_estimasi_waktu, @p_status)");
             
-            // Binding parameter IN
             $stmt->bindParam(1, $pengunjung_id, PDO::PARAM_INT);
             $stmt->bindParam(2, $dokter_id, PDO::PARAM_INT);
             $stmt->bindParam(3, $tanggal_kunjungan, PDO::PARAM_STR);
@@ -40,20 +62,16 @@ class AntrianController extends Controller
             $stmt->execute();
             $stmt->closeCursor();
 
-            // Mengambil hasil dari variabel OUT yang di-set oleh Stored Procedure
             $result = $pdo->query("SELECT @p_nomor_antrian as nomor_antrian, @p_estimasi_waktu as estimasi, @p_status as status")->fetch(PDO::FETCH_ASSOC);
 
-            // Memeriksa status hasil dari Stored Procedure
             if (str_starts_with($result['status'], 'SUCCESS')) {
                 return redirect()->route('pengunjung.dashboard')->with('success', 'Antrian ' . $result['nomor_antrian'] . ' berhasil diambil!');
             } else {
-                // Mengambil pesan error yang informatif dari Stored Procedure
                 $errorMessage = str_replace('ERROR: ', '', $result['status']);
                 return redirect()->back()->with('error', 'Gagal mengambil antrian: ' . $errorMessage)->withInput();
             }
 
         } catch (\Throwable $e) {
-            // Menangani error teknis jika terjadi
             report($e);
             return redirect()->back()->with('error', 'Terjadi kesalahan pada sistem. Silakan coba lagi.')->withInput();
         }
@@ -61,7 +79,6 @@ class AntrianController extends Controller
 
     /**
      * Membatalkan antrian yang sudah ada.
-     * Metode ini akan memanggil Stored Procedure `sp_batalkan_antrian`.
      */
     public function batalkan($id)
     {
@@ -93,17 +110,13 @@ class AntrianController extends Controller
 
     /**
      * Menampilkan status antrian aktif milik pengguna.
-     * Metode ini memanggil Stored Procedure `sp_cek_status_antrian`.
      */
     public function status()
     {
         $pengunjung_id = Auth::id();
         $tanggal_hari_ini = now()->toDateString();
 
-        // Memanggil stored procedure untuk mendapatkan status antrian yang detail
         $status_antrian = DB::select('CALL sp_cek_status_antrian(?, ?)', [$pengunjung_id, $tanggal_hari_ini]);
-        
-        // Ambil hasil pertama, atau null jika tidak ada hasil
         $antrian = $status_antrian[0] ?? null;
 
         return view('pengunjung.status', compact('antrian'));
@@ -122,7 +135,7 @@ class AntrianController extends Controller
             ->where('a.pengunjung_id', $pengunjung_id)
             ->where('a.status_antrian', 'selesai')
             ->orderByDesc('a.tanggal_kunjungan')
-            ->paginate(10); // Menambahkan paginasi untuk halaman riwayat
+            ->paginate(10);
 
         return view('pengunjung.riwayat', compact('riwayat'));
     }

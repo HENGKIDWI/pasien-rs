@@ -16,13 +16,7 @@ use App\Http\Controllers\LandingController;
 |--------------------------------------------------------------------------
 | Rute untuk Tamu (Guest)
 |--------------------------------------------------------------------------
-|
-| Rute-rute ini dapat diakses oleh siapa saja, baik yang sudah login
-| maupun yang belum. Di sinilah tempat rute login, register, dll.
-|
 */
-
-
 
 Route::get('/', [LandingController::class, 'index'])->name('beranda');
 
@@ -34,10 +28,6 @@ require __DIR__ . '/auth.php';
 |--------------------------------------------------------------------------
 | Rute Terotentikasi (Untuk Pengguna yang Sudah Login)
 |--------------------------------------------------------------------------
-|
-| Semua rute di dalam grup ini dilindungi. Hanya pengguna yang sudah
-| login yang bisa mengaksesnya.
-|
 */
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -47,11 +37,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $role = auth()->user()->role;
 
         if ($role === 'dokter') {
-            return redirect()->route('dokter.dashboard'); // Gunakan name() untuk redirect
+            return redirect()->route('dokter.dashboard');
         }
 
         // Asumsikan selain dokter adalah pengunjung
-        return redirect()->route('pengunjung.dashboard'); // Gunakan name() untuk redirect
+        return redirect()->route('pengunjung.dashboard');
 
     })->name('dashboard');
 
@@ -61,33 +51,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // ===== RUTE FITUR UNTUK DOKTER =====
-    Route::middleware(['auth'])->prefix('dokter')->group(function () {
-        Route::get('/dashboard', [DokterDashboardController::class, 'index'])->name('dokter.dashboard');
-        Route::get('/antrian', [DokterAntrianController::class, 'index'])->name('dokter.antrian');
-        Route::post('/antrian/{id}/selesai', [DokterAntrianController::class, 'markSelesai'])->name('dokter.antrian.selesai');
-        Route::get('/gaji', [DokterGajiController::class, 'index'])->name('dokter.gaji');
+    Route::middleware(['auth'])->prefix('dokter')->name('dokter.')->group(function () {
+        Route::get('/dashboard', [DokterDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/antrian', [DokterAntrianController::class, 'index'])->name('antrian');
+        Route::post('/antrian/{id}/selesai', [DokterAntrianController::class, 'markSelesai'])->name('antrian.selesai');
+        Route::get('/gaji', [DokterGajiController::class, 'index'])->name('gaji');
     });
 
 
     // ===== RUTE FITUR UNTUK PENGUNJUNG =====
-    Route::middleware(['auth'])->prefix('pengunjung')->group(function () {
+    // Menambahkan ->name('pengunjung.') akan membuat nama rute menjadi konsisten
+    // Contoh: 'pengunjung.dashboard', 'pengunjung.ambil-antrian', dll.
+    Route::middleware(['auth'])->prefix('pengunjung')->name('pengunjung.')->group(function () {
 
         // Dashboard utama
-        Route::get('/dashboard', [DashboardController::class, 'index'])->name('pengunjung.dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
         // Lihat jadwal dokter
-        Route::get('/jadwal', [JadwalController::class, 'index'])->name('pengunjung.jadwal');
+        Route::get('/jadwal', [JadwalController::class, 'index'])->name('jadwal');
+        
+        // Lihat status antrian saat ini
+        Route::get('/status', [AntrianController::class, 'status'])->name('status');
+        
+        // Riwayat kunjungan
+        Route::get('/riwayat', [AntrianController::class, 'riwayat'])->name('riwayat');
 
         // --- Rute Terkait Antrian ---
         Route::post('/ambil-antrian', [AntrianController::class, 'ambil'])->name('ambil-antrian');
         Route::post('/antrian/{id}/batalkan', [AntrianController::class, 'batalkan'])->name('antrian.batalkan');
 
-        // Rute BARU untuk mengambil jadwal berdasarkan poli
+        // Rute untuk mengambil jadwal berdasarkan poli via AJAX
         Route::get('/jadwal-by-poli/{poli_id}', [AntrianController::class, 'getJadwalByPoli'])->name('jadwal.by.poli');
 
-        // Lihat status antrian saat ini
-        Route::get('/status', [AntrianController::class, 'status'])->name('pengunjung.status');
-        // Riwayat kunjungan
-        Route::get('/riwayat', [AntrianController::class, 'riwayat'])->name('pengunjung.riwayat');
     });
 });

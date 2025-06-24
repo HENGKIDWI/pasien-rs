@@ -2,9 +2,12 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -41,15 +44,36 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
+        // --- LOGIKA LOGIN MANUAL DIMULAI DI SINI ---
 
-            throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
-            ]);
+        // 1. Cari pengguna di VIEW 'users' berdasarkan email
+        $userFromView = DB::table('users')->where('email', $this->input('email'))->first();
+
+        // 2. Jika pengguna ditemukan DAN password cocok
+        if ($userFromView && Hash::check($this->input('password'), $userFromView->password)) {
+            
+            // 3. Ambil model User yang sebenarnya agar bisa login
+            $user = User::find($userFromView->id);
+            
+            if ($user) {
+                // 4. Login pengguna secara manual.
+                // PENTING: Parameter kedua (remember) sengaja dihilangkan untuk
+                // mencegah Laravel mencoba menulis 'remember_token' ke VIEW.
+                Auth::login($user);
+                
+                RateLimiter::clear($this->throttleKey());
+                return; // Hentikan eksekusi jika berhasil
+            }
         }
+        
+        // --- LOGIKA LOGIN MANUAL SELESAI ---
+        
+        // Jika gagal, jalankan prosedur error standar
+        RateLimiter::hit($this->throttleKey());
 
-        RateLimiter::clear($this->throttleKey());
+        throw ValidationException::withMessages([
+            'email' => trans('auth.failed'),
+        ]);
     }
 
     /**
