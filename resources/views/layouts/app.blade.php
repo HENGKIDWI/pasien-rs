@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,16 +15,22 @@
     {{-- Memuat CSS dari Vite --}}
     @vite(['resources/css/app.css'])
 
-    {{-- Memuat Alpine.js secara langsung di <head> menggunakan defer --}}
-    {{-- Atribut 'defer' memastikan skrip dieksekusi setelah dokumen HTML selesai di-parse, --}}
-    {{-- namun sebelum event DOMContentLoaded, sehingga siap digunakan oleh skrip lain. --}}
-    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    
-</head>
+    {{-- Memuat Alpine.js secara langsung di
+
+    <head> menggunakan defer --}}
+        {{-- Atribut 'defer' memastikan skrip dieksekusi setelah dokumen HTML selesai di-parse, --}}
+        {{-- namun sebelum event DOMContentLoaded, sehingga siap digunakan oleh skrip lain. --}}
+        <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    </head>
+
 <body class="font-sans antialiased bg-gray-100">
     <div class="min-h-screen">
         {{-- Memasukkan navigasi --}}
-        @include('layouts.navigation')
+        @if (!Request::is('/'))
+            @include('layouts.navigation')
+        @endif
+
 
         <!-- Header Halaman (Jika ada) -->
         @if (isset($header))
@@ -43,11 +50,12 @@
     {{-- Memuat JS aplikasi dari Vite sebelum akhir body --}}
     @vite(['resources/js/app.js'])
 
-    {{-- 
-        @stack('scripts') akan merender skrip apa pun yang di-push dari view anak.
-        Ini adalah tempat yang tepat untuk logika JavaScript spesifik halaman,
-        karena akan dieksekusi setelah semua library utama (seperti Alpine.js) dimuat.
+    {{--
+    @stack('scripts') akan merender skrip apa pun yang di-push dari view anak.
+    Ini adalah tempat yang tepat untuk logika JavaScript spesifik halaman,
+    karena akan dieksekusi setelah semua library utama (seperti Alpine.js) dimuat.
     --}}
     @stack('scripts')
 </body>
+
 </html>

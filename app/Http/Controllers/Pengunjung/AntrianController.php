@@ -17,21 +17,26 @@ class AntrianController extends Controller
     public function getJadwalByPoli($poli_id)
     {
         $dayMap = [
-            1 => 'senin', 2 => 'selasa', 3 => 'rabu', 4 => 'kamis', 
-            5 => 'jumat', 6 => 'sabtu', 7 => 'minggu'
+            1 => 'senin',
+            2 => 'selasa',
+            3 => 'rabu',
+            4 => 'kamis',
+            5 => 'jumat',
+            6 => 'sabtu',
+            7 => 'minggu'
         ];
         $todayIndonesian = $dayMap[now()->dayOfWeekIso];
-    
+
         // Mengambil daftar dokter unik beserta biaya konsultasinya dari VIEW
         $jadwal = DB::table('v_jadwal_dokter_lengkap')
-                    ->where('poli_id', $poli_id)
-                    ->where('hari', $todayIndonesian)
-                    ->where('sisa_kuota_hari_ini', '>', 0)
-                    // Memastikan kita mengambil biaya konsultasi
-                    ->select('dokter_id', 'nama_dokter', 'gelar', 'biaya_konsultasi')
-                    ->distinct('dokter_id') // Hanya satu entri per dokter
-                    ->get();
-        
+            ->where('poli_id', $poli_id)
+            ->where('hari', $todayIndonesian)
+            ->where('sisa_kuota_hari_ini', '>', 0)
+            // Memastikan kita mengambil biaya konsultasi
+            ->select('dokter_id', 'nama_dokter', 'gelar', 'biaya_konsultasi')
+            ->distinct('dokter_id') // Hanya satu entri per dokter
+            ->get();
+
         return response()->json($jadwal);
     }
 
@@ -53,12 +58,12 @@ class AntrianController extends Controller
         try {
             $pdo = DB::connection()->getPdo();
             $stmt = $pdo->prepare("CALL sp_ambil_antrian(?, ?, ?, ?, @p_nomor_antrian, @p_estimasi_waktu, @p_status)");
-            
+
             $stmt->bindParam(1, $pengunjung_id, PDO::PARAM_INT);
             $stmt->bindParam(2, $dokter_id, PDO::PARAM_INT);
             $stmt->bindParam(3, $tanggal_kunjungan, PDO::PARAM_STR);
             $stmt->bindParam(4, $keluhan, PDO::PARAM_STR);
-            
+
             $stmt->execute();
             $stmt->closeCursor();
 
@@ -87,7 +92,7 @@ class AntrianController extends Controller
         try {
             $pdo = DB::connection()->getPdo();
             $stmt = $pdo->prepare("CALL sp_batalkan_antrian(?, ?, @p_status)");
-            
+
             $stmt->bindParam(1, $id, PDO::PARAM_INT);
             $stmt->bindParam(2, $pengunjung_id, PDO::PARAM_INT);
 
@@ -127,15 +132,13 @@ class AntrianController extends Controller
      */
     public function riwayat()
     {
-        $pengunjung_id = Auth::id();
+        $pengunjungId = Auth::id();
 
-        $riwayat = DB::table('antrian as a')
-            ->join('dokter as d', 'a.dokter_id', '=', 'd.id')
-            ->select('a.id', 'a.tanggal_kunjungan', 'a.status_antrian', 'a.jam_kunjungan', 'd.nama_dokter', 'd.gelar')
-            ->where('a.pengunjung_id', $pengunjung_id)
-            ->where('a.status_antrian', 'selesai')
-            ->orderByDesc('a.tanggal_kunjungan')
-            ->paginate(10);
+        // PERBAIKAN: Mengambil data dari VIEW baru yang lebih efisien
+        $riwayat = DB::table('v_riwayat_kunjungan')
+            ->where('pengunjung_id', $pengunjungId)
+            ->orderByDesc('tanggal_kunjungan')
+            ->paginate(10); // Menggunakan paginasi untuk membatasi data per halaman
 
         return view('pengunjung.riwayat', compact('riwayat'));
     }

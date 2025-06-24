@@ -1,36 +1,65 @@
 <?php
+
 namespace App\Http\Controllers\Dokter;
 
 use App\Http\Controllers\Controller;
+use App\Models\Antrian;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Http\Request;
 
 class AntrianController extends Controller
 {
-    // Tampilkan daftar antrian hari ini
+    /**
+     * Menampilkan semua antrian untuk dokter yang login.
+     */
     public function index()
     {
-        $dokter_id = Auth::id();
+        $dokterId = Auth::id() > 1000000 ? Auth::id() - 1000000 : Auth::id();
 
-        $antrian = DB::table('antrian as a')
-            ->join('pengunjung as p', 'a.pengunjung_id', '=', 'p.id')
-            ->select('a.*', 'p.nama_lengkap as nama_pengunjung')
-            ->where('a.dokter_id', $dokter_id)
-            ->whereDate('a.tanggal_kunjungan', now()->toDateString())
-            ->orderBy('a.jam_kunjungan')
-            ->get();
+        // PERBAIKAN: Nama variabel diubah dari '$antrian' menjadi '$antrianHariIni'
+        // agar sesuai dengan yang diharapkan oleh view.
+        $antrianHariIni = DB::table('v_daftar_antrian_harian')
+                     ->where('dokter_id', $dokterId)
+                     // Hanya menampilkan data hari ini di halaman antrian
+                     ->whereDate('tanggal_kunjungan', today())
+                     ->orderBy('status_antrian', 'desc') // Menampilkan yang dipanggil/menunggu di atas
+                     ->orderBy('jam_mulai', 'asc')
+                     ->get();
 
-        return view('dokter.antrian', compact('antrian'));
+        // Mengirim variabel dengan nama yang sudah diperbaiki
+        return view('dokter.antrian', compact('antrianHariIni'));
     }
 
-    // Tandai antrian selesai
-    public function markSelesai($id)
+    /**
+     * Mengubah status antrian menjadi 'dipanggil'.
+     */
+    public function panggil(Antrian $antrian)
     {
-        DB::table('antrian')->where('id', $id)->update([
-            'status_antrian' => 'selesai'
-        ]);
+        $dokterId = Auth::id() > 1000000 ? Auth::id() - 1000000 : Auth::id();
+        if ($antrian->dokter_id != $dokterId) {
+            return back()->with('error', 'Aksi tidak diizinkan.');
+        }
 
-        return redirect()->route('dokter.antrian')->with('success', 'Antrian ditandai selesai.');
+        $antrian->status_antrian = 'dipanggil';
+        $antrian->save();
+
+        // Redirect kembali ke halaman antrian, bukan ke dasbor
+        return redirect()->route('dokter.antrian')->with('success', "Pasien dengan nomor antrian {$antrian->nomor_antrian} telah dipanggil.");
+    }
+
+    /**
+     * Menyelesaikan konsultasi dengan memanggil Stored Procedure.
+     */
+    public function selesai(Antrian $antrian)
+    {
+        $dokterId = Auth::id() > 1000000 ? Auth::id() - 1000000 : Auth::id();
+        if ($antrian->dokter_id != $dokterId) {
+            return back()->with('error', 'Aksi tidak diizinkan.');
+        }
+
+        DB::statement('CALL sp_selesaikan_antrian(?, ?)', [$antrian->id, $dokterId]);
+
+        // Redirect kembali ke halaman antrian, bukan ke dasbor
+        return redirect()->route('dokter.antrian')->with('success', "Konsultasi dengan nomor antrian {$antrian->nomor_antrian} telah selesai.");
     }
 }
